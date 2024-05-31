@@ -503,21 +503,14 @@ class MultiHeadAttention(nn.Module):
                 torch.backends.cuda.enable_math_sdp(self.previous_math)
 
         else:  # Use flashinfer for decode
+            keys_fi = keys_c
+            values_fi = values_c
+            if self.use_fp8_kvcache:
+                keys_fi = keys_c._data
+                values_fi = values_c._data
             attn = torch.ops.fp8_fast.batch_decode_with_padded_kv_cache(
-                queries, keys_c._data, values_c._data
+                queries, keys_fi, values_fi
             )
-            # # remove seq_len dimension from queries
-            # queries = torch.squeeze(queries)
-            # # if USE_FP8_DECODE:
-            # queries = queries.to(torch.float8_e5m2)
-            # # attn: b x h x ds
-            # attn = batch_decode_with_padded_kv_cache(
-            #     queries,
-            #     keys_c._data,
-            #     values_c._data,
-            #     kv_layout='HND',
-            # )
-            # attn = attn.unsqueeze(2)
 
         # attn: bs x seq_len x nheads*emb_v_per_head
         # attn: b x h x qlen x ds
