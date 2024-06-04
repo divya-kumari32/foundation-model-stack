@@ -6,8 +6,8 @@ import random
 
 import numpy as np
 import torch
-import torch._inductor.config
 import torch._dynamo.config
+import torch._inductor.config
 from torch import distributed as dist
 
 from fms.models import get_model
@@ -142,6 +142,7 @@ if args.compile:
     prefill_model = torch.compile(model, fullgraph=True)
     decode_model = torch.compile(model, mode=args.compile_mode, fullgraph=True)
 
+
 def ids_for_prompt(prompt):
     tokens = tokenizer.tokenize(prompt)
     tokens = ["<s>"] + tokens
@@ -191,6 +192,7 @@ max_len = max([len(prompt) for prompt in [prompt1, prompt2]])
 
 # ids = prompt1.unsqueeze(0)
 ids = torch.randint(0, 32000, (384, 128), device=device)
+
 
 def print_result(result):
     if local_rank != 0:

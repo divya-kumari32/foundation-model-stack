@@ -1,4 +1,5 @@
 import argparse
+import gc
 import itertools
 import logging
 import os
@@ -12,7 +13,7 @@ from fms.models import get_model
 from fms.utils import generation, tokenizers
 from fms.utils.generation import generate
 
-import gc
+
 # This example script validates the LLaMA implementation by running inference on a couple of prompts.
 #
 # Example usage with single-GPU 7B model on slurm, with torch.compile and determinstic behavior:
@@ -65,8 +66,8 @@ parser.add_argument(
 parser.add_argument(
     "--fp8_linear_type",
     type=str,
-    default='dasw',
-    choices=['dadw', 'dasw', 'sw', 'ns'],
+    default="dasw",
+    choices=["dadw", "dasw", "sw", "ns"],
     help="Choose the float8 linear type",
 )
 parser.add_argument(
@@ -79,7 +80,12 @@ parser.add_argument(
     type=str,
     help="Mode for compilation",
     default="default",
-    choices=["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"],
+    choices=[
+        "default",
+        "reduce-overhead",
+        "max-autotune",
+        "max-autotune-no-cudagraphs",
+    ],
 )
 parser.add_argument(
     "--deterministic",
@@ -92,10 +98,10 @@ parser.add_argument(
     help="This is a distributed job (multiple instances run with RANK+WORLD_SIZE)",
 )
 parser.add_argument("--context_file", type=str, default=None, help="File to summarize")
-parser.add_argument('--max_new_tokens', type=int, default=2048)
-parser.add_argument('--max_seq_len', type=int, default=128)
-parser.add_argument('--batch_size', type=int, default=128)
-parser.add_argument('--reps', type=int, default=10)
+parser.add_argument("--max_new_tokens", type=int, default=2048)
+parser.add_argument("--max_seq_len", type=int, default=128)
+parser.add_argument("--batch_size", type=int, default=128)
+parser.add_argument("--reps", type=int, default=10)
 args = parser.parse_args()
 print(args)
 
@@ -114,8 +120,8 @@ if args.deterministic:
     torch.use_deterministic_algorithms(True)
 
 if args.distributed:
-    os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '29508'
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = "29508"
     dist.init_process_group()
     # Fix until PT 2.3
     torch._C._distributed_c10d._register_process_group("default", dist.group.WORLD)
@@ -134,7 +140,7 @@ else:
 model = get_model(
     args.architecture,
     args.variant,
-    # model_path=args.model_path,
+    model_path=args.model_path,
     device_type=args.device_type,
     source=args.model_source,
     distributed_strategy=distr_param,
@@ -149,18 +155,24 @@ prefill_model = model
 decode_model = model
 
 if args.fp8:
-    from float8_experimental.float8_linear import Float8Linear, Float8DASWLinear, Float8SWLinear
-    from float8_experimental.float8_linear_utils import (
-        swap_linear_with_float8_linear,
+    from float8_experimental.float8_linear import (
+        Float8DASWLinear,
+        Float8Linear,
+        Float8SWLinear,
     )
+    from float8_experimental.float8_linear_utils import swap_linear_with_float8_linear
+
     fp8LinearDict = {
-        'dadw': Float8Linear,
-        'dasw': Float8DASWLinear,
-        'sw':   Float8SWLinear,
-        'ns':   None,
+        "dadw": Float8Linear,
+        "dasw": Float8DASWLinear,
+        "sw": Float8SWLinear,
+        "ns": None,
     }
     print("casting the model weights to FP8")
-    model = swap_linear_with_float8_linear(model, fp8LinearDict[args.fp8_linear_type])
+    skip_fqn_list = [f"layers.{i}.ff_sub_layer.w2" for i in [1, 30]] + ["shared.head"]
+    model = swap_linear_with_float8_linear(
+        model, fp8LinearDict[args.fp8_linear_type], skip_fqn_list=skip_fqn_list
+    )
 
 if args.compile:
     print("compiling model")
@@ -169,6 +181,7 @@ if args.compile:
     torch._inductor.config.fx_graph_cache = True
     prefill_model = torch.compile(model, fullgraph=True)
     decode_model = torch.compile(model, mode=args.compile_mode, fullgraph=True)
+
 
 def ids_for_prompt(prompt):
     tokens = tokenizer.tokenize(prompt)
@@ -222,6 +235,7 @@ max_len = max([len(prompt) for prompt in [prompt1, prompt2]])
 # ids = torch.randint(0, 32000, (256, 128), device=device)
 ids = torch.randint(0, 32000, (args.batch_size, args.max_seq_len), device=device)
 
+
 def print_result(result):
     if local_rank != 0:
         return
@@ -257,43 +271,25 @@ def infer(use_cache, do_sample):
         do_sample=do_sample,
         max_seq_len=max_seq_len,
     )
-    #for i in range(result.shape[0]):
+    # for i in range(result.shape[0]):
     #    print_result(result[i])
+
 
 # input("Press Enter to continue...")
 import time
+
+
 print("generating output", local_rank)
 do_sample = [False]
 use_cache = [
     args.no_use_cache
 ]  # True/False are identical with greedy iff `torch.use_deterministic_algorithms(True)`
-# torch.cuda.profiler.start()
-def trace_handler(p, output_path, extra_name=""):
-    output = p.key_averages().table(sort_by="self_cuda_time_total", row_limit=30)
-    print(output)
-    p.export_chrome_trace(
-        f"{output_path}/trace_step{str(p.step_num)}_{extra_name}.json"
-    )
-# with torch.profiler.profile(
-#         activities=[
-#             torch.profiler.ProfilerActivity.CPU,
-#             torch.profiler.ProfilerActivity.CUDA,
-#         ],
-#         on_trace_ready=functools.partial(
-#             trace_handler,
-#             output_path="/net/storage149/mnt/md0/aviros/foundation-model-stack",
-#             extra_name=str(local_rank),
-#         ),
-#         with_stack=True,
-#         profile_memory=True,
-#         record_shapes=True,
-#         schedule=torch.profiler.schedule(skip_first=2, active=1, wait=0, warmup=1)
-#     ) as prof:
+torch.cuda.profiler.start()
 
 try:
     with torch.no_grad():
         for sample, cache in itertools.product(do_sample, use_cache):
-            #with torch.profiler.profile(
+            # with torch.profiler.profile(
             #     activities=[
             #         torch.profiler.ProfilerActivity.CPU,
             #         torch.profiler.ProfilerActivity.CUDA,
@@ -304,27 +300,26 @@ try:
             #     #        warmup=1,
             #     #        active=1,
             #     #        repeat=1),
-            #) as prof:
-                for _ in range(args.reps):
-                #for _ in [1]:
-                    # input("Press Enter to continue...")
-                    torch.compiler.cudagraph_mark_step_begin()
-                    t0 = time.time_ns()
-                    infer(cache, sample)
-                    torch.cuda.synchronize()
-                    t1 = time.time_ns()
-                    dt = float(t1 - t0) / 1E9
-                    print("total inference time: ", dt)
-                    torch.cuda.empty_cache()
-                    # prof.step()
-                    # input("Press Enter to continue...")
-            #print(prof.key_averages().table(sort_by="self_cuda_memory_usage",row_limit=10))
-            # prof.export_chrome_trace("trace.json")
+            # ) as prof:
+            for _ in range(args.reps):
+                # for _ in [1]:
+                # input("Press Enter to continue...")
+                torch.compiler.cudagraph_mark_step_begin()
+                t0 = time.time_ns()
+                infer(cache, sample)
+                torch.cuda.synchronize()
+                t1 = time.time_ns()
+                dt = float(t1 - t0) / 1e9
+                print("total inference time: ", dt)
+                torch.cuda.empty_cache()
+                # prof.step()
+                # input("Press Enter to continue...")
+        # print(prof.key_averages().table(sort_by="self_cuda_memory_usage",row_limit=10))
+        # prof.export_chrome_trace("trace.json")
 except torch.cuda.OutOfMemoryError as e:
     print(e)
 finally:
     # prof.step()
-    pass
-    # torch.cuda.profiler.stop()
+    torch.cuda.profiler.stop()
 
     # torch.cuda.memory._dump_snapshot("./fp8_memory.pickle")

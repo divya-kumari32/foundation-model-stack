@@ -32,10 +32,11 @@ try:
     )
 
     @torch.library.impl("fp8_fast::batch_decode_with_padded_kv_cache", "CUDA")
-    def flashinfer_compile(queries, keys, values):
-        queries = torch.squeeze(queries).clone(memory_format=torch.contiguous_format)
-        # if USE_FP8_DECODE:
-        queries = queries.to(torch.float8_e5m2)
+    def flashinfer_compile(
+        queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor
+    ):
+        B, H, S, E = queries.shape
+        queries = queries.view(B, H, E).clone(memory_format=torch.contiguous_format)
         # attn: b x h x ds
         attn = batch_decode_with_padded_kv_cache(
             queries,
@@ -53,8 +54,8 @@ try:
 except:
     pass
 
-USE_FLASHINFER_FP8_DECODE = True and HAS_FLASHINFER
-USE_FP8_FUSED_ATTN = True  # turn this on if testing fp8 attn kernels
+USE_FLASHINFER_DECODE = True and HAS_FLASHINFER
+USE_FP8_ATTENTION = True
 
 
 class QKV(nn.Module, metaclass=abc.ABCMeta):
@@ -376,6 +377,26 @@ class MultiHeadAttention(nn.Module):
         keys = keys.transpose(2, 1)  # / (self.emb_kq_per_head**(1/4))
         values = values.transpose(2, 1)  # compatible with QK.T
 
+        if self.use_fp8_kvcache:
+            if use_cache and past_key_value_state is None:
+                max_fp8_value = 57344.0
+                self.fp8_kv_scale.copy_(
+                    torch.max(
+                        torch.max(
+                            torch.max(torch.abs(keys)) / max_fp8_value,
+                            self.fp8_kv_scale,
+                        ),
+                        torch.max(
+                            torch.max(torch.abs(values)) / max_fp8_value,
+                            self.fp8_kv_scale,
+                        ),
+                    )
+                )
+            keys = Float8Tensor.to_float8(keys, self.fp8_kv_scale, torch.float8_e5m2)
+            values = Float8Tensor.to_float8(
+                values, self.fp8_kv_scale, torch.float8_e5m2
+            )
+
         # if you want to use caching and past_key_value_state is not None meaning you have values in your cache
         if (
             use_cache
@@ -383,13 +404,6 @@ class MultiHeadAttention(nn.Module):
             and past_key_value_state[0].numel() > 0
         ):
             if is_self:
-                if self.use_fp8_kvcache:
-                    keys = Float8Tensor.to_float8(
-                        keys, self.fp8_kv_scale, torch.float8_e5m2
-                    )
-                    values = Float8Tensor.to_float8(
-                        values, self.fp8_kv_scale, torch.float8_e5m2
-                    )
                 past_key_value_state[0][:, :, position_ids[0]] = keys
                 past_key_value_state[1][:, :, position_ids[0]] = values
                 keys_c = past_key_value_state[0]
@@ -400,15 +414,6 @@ class MultiHeadAttention(nn.Module):
         else:
             B, H, _, E = keys.shape
             if self.use_fp8_kvcache:
-                max_fp8_value = 57344.0
-                self.fp8_kv_scale.copy_(torch.max(
-                    torch.max(
-                        torch.max(torch.abs(keys)) / max_fp8_value, self.fp8_kv_scale
-                    ),
-                    torch.max(
-                        torch.max(torch.abs(values)) / max_fp8_value, self.fp8_kv_scale
-                    ),
-                ))
                 keys_c = Float8Tensor.to_float8(
                     torch.zeros((B, H, 256, E), device=keys.device, dtype=keys.dtype),
                     self.fp8_kv_scale,
@@ -419,12 +424,6 @@ class MultiHeadAttention(nn.Module):
                     self.fp8_kv_scale,
                     torch.float8_e5m2,
                 )
-                keys_c[:, :, position_ids[0]] = Float8Tensor.to_float8(
-                    keys, self.fp8_kv_scale, torch.float8_e5m2
-                )
-                values_c[:, :, position_ids[0]] = Float8Tensor.to_float8(
-                    values, self.fp8_kv_scale, torch.float8_e5m2
-                )
             else:
                 keys_c = torch.zeros(
                     (B, H, 256, E), device=keys.device, dtype=keys.dtype
@@ -432,8 +431,8 @@ class MultiHeadAttention(nn.Module):
                 values_c = torch.zeros(
                     (B, H, 256, E), device=keys.device, dtype=values.dtype
                 )
-                keys_c[:, :, position_ids[0]] = keys
-                values_c[:, :, position_ids[0]] = values
+            keys_c[:, :, position_ids[0]] = keys
+            values_c[:, :, position_ids[0]] = values
 
         # Merge rel pos bias and mask into single float mask
         if mask is not None:
@@ -449,9 +448,7 @@ class MultiHeadAttention(nn.Module):
         else:
             attn_mask = mask
 
-        if (
-            not USE_FLASHINFER_FP8_DECODE or q_len > 1
-        ):  # Use flash attn for prefill only
+        if not USE_FLASHINFER_DECODE or q_len > 1:  # Use flash attn for prefill only
             keys_sdpa = keys_c
             values_sdpa = values_c
             if self.use_fp8_kvcache:
@@ -503,14 +500,25 @@ class MultiHeadAttention(nn.Module):
                 torch.backends.cuda.enable_math_sdp(self.previous_math)
 
         else:  # Use flashinfer for decode
+            queries_fi = queries
             keys_fi = keys_c
             values_fi = values_c
-            if self.use_fp8_kvcache:
-                keys_fi = keys_c._data
-                values_fi = values_c._data
+            if USE_FP8_ATTENTION:
+                queries_fi = queries_fi.to(dtype=torch.float8_e5m2)
+                if self.use_fp8_kvcache:
+                    keys_fi = keys_c._data
+                    values_fi = values_c._data
+                else:
+                    keys_fi = keys_c.to(dtype=torch.float8_e5m2)
+                    values_fi = values_c.to(dtype=torch.float8_e5m2)
+            else:
+                if self.use_fp8_kvcache:
+                    keys_fi = keys_c.to_original_precision()
+                    values_fi = values_c.to_original_precision()
+
             attn = torch.ops.fp8_fast.batch_decode_with_padded_kv_cache(
-                queries, keys_fi, values_fi
-            )
+                queries_fi, keys_fi, values_fi
+            ).to(dtype=queries.dtype)
 
         # attn: bs x seq_len x nheads*emb_v_per_head
         # attn: b x h x qlen x ds
