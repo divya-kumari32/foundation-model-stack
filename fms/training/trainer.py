@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from fms.training.plugins import TrainerPlugin
 from fms.utils import print0
 
+import csv
 
 def __one_step(
     model: nn.Module,
@@ -79,6 +80,16 @@ def __one_epoch(
         label = label.to(device)
 
         loss = __one_step(model, input, label, loss_fn, grad_scaler)
+        
+        with open('gradients.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            
+            # Log gradients to the CSV file
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    for elem in param.grad.view(-1):
+                        writer.writerow([step, name, elem.item()])
+
         if (step + 1) % accum_iters == 0:
             __optimize(model, optimizer, grad_scaler)
             optimized = True
