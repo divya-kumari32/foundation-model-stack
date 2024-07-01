@@ -440,7 +440,7 @@ class LLaMAForClassification(nn.Module):
         head = LinearClassificationHead(
             self.config.emb_dim, self.config.num_classes, bias=False
         )
-        self.head = self.distributed_strategy.distribute_module(head)
+        self.classification_head = self.distributed_strategy.distribute_module(head)
 
     def get_config(self) -> LLaMAForClassificationConfig:
         return self.config
@@ -452,7 +452,7 @@ class LLaMAForClassification(nn.Module):
         return cls(config)
 
     def reset_head(self):
-        self.head.weight.data.normal_(
+        self.classification_head.weight.data.normal_(
             0, 1 / math.sqrt(math.sqrt(self.config.emb_dim * self.config.num_classes))
         )
 
@@ -477,7 +477,7 @@ class LLaMAForClassification(nn.Module):
                 assert p.isnan().int().sum() == 0
                 assert p.isinf().int().sum() == 0
             self.base_model.validate_reset_parameters()
-            check_close(self.head.weight)
+            check_close(self.classification_head.weight)
 
     def forward(
         self,
@@ -496,7 +496,7 @@ class LLaMAForClassification(nn.Module):
         if only_last_token:
             output = output[:, -1, :]
 
-        preds = self.head(torch.mean(output, dim=1))
+        preds = self.classification_head(torch.mean(output, dim=1))
 
         if use_cache:
             return preds, cache
