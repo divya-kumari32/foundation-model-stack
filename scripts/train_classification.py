@@ -250,8 +250,8 @@ def main():
     )
     model.base_model.rot_emb.compute_freqs_cis(device, 512)
     model.reset_head()
-    for param in model.base_model.parameters():
-        param.requires_grad = False
+    # for param in model.base_model.parameters():
+        # param.requires_grad = False
     optimizer, dataset_sd, epoch, prev_step, cum_tokens = training_state(
         args.model_path, model, rank
     )

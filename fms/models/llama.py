@@ -496,7 +496,7 @@ class LLaMAForClassification(nn.Module):
         if only_last_token:
             output = output[:, -1, :]
 
-        preds = self.classification_head(torch.mean(output, dim=1))
+        preds = self.classification_head(output[:, -1, :])
 
         if use_cache:
             return preds, cache
