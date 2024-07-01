@@ -266,8 +266,6 @@ def main():
 
     tokenizer = tokenizers.get_tokenizer(args.tokenizer)
 
-    print0("tokenizer pad token ID: ", tokenizer.pad_token_id)
-
     bos_token_id = tokenizer.bos_token_id
     eos_token_id = tokenizer.eos_token_id
     bos_token = tokenizer.convert_ids_to_tokens([bos_token_id])[0]
