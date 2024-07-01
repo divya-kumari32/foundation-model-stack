@@ -590,10 +590,12 @@ models.register_model(
     _llama_factory_factory(_granite_3b_code_base_config),
 )
 
+_granite_7b_base_classification_config = LLaMAForClassificationConfig()
+
 models.register_model(
     "llama_classifier",
-    "ibm.granite.3b.code.base",
-    _llama_classification_factory_factory(_granite_3b_code_base_classification_config),
+    "ibm.granite.7b.base",
+    _llama_classification_factory_factory(_granite_7b_base_classification_config),
 )
 
 
