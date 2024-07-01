@@ -62,6 +62,11 @@ parser.add_argument(
     help="The model variant (configuration) to tune. E.g. 7b, 13b, 70b.",
 )
 parser.add_argument(
+    "--compile",
+    action="store_true",
+    help="The model variant (configuration) to tune. E.g. 7b, 13b, 70b.",
+)
+parser.add_argument(
     "--num_classes",
     type=str,
     default="micro",
@@ -261,8 +266,9 @@ def main():
     )
     print0("dataset state", dataset_sd)
 
-    # model = torch.compile(model)
-    # optimizer.step = torch.compile(optimizer.step)
+    if args.compile: 
+        model = torch.compile(model)
+        optimizer.step = torch.compile(optimizer.step)
 
     tokenizer = tokenizers.get_tokenizer(args.tokenizer)
 
