@@ -79,6 +79,10 @@ def __one_epoch(
         input = input.to(device)
         label = label.to(device)
 
+        # assert input.max() < 32000 and input.min() >= 0, "Input indices out of range"
+        print0("Max input id: ", input.max())
+        print0("Min input id: ", input.min())
+
         loss = __one_step(model, input, label, loss_fn, grad_scaler)
         
         with open('gradients.csv', 'a', newline='') as file:
