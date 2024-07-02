@@ -10,7 +10,9 @@ from torch.utils.data import DataLoader, DistributedSampler
 from fms.training.plugins import TrainerPlugin
 from fms.utils import print0
 
-import csv
+# import csv
+import numpy as np
+import pickle
 
 def __one_step(
     model: nn.Module,
@@ -79,19 +81,37 @@ def __one_epoch(
         input = input.to(device)
         label = label.to(device)
 
-        # print0("Max input id: ", input.max())
-        # print0("Min input id: ", input.min())
+        gradient_stats_all = []
 
         loss = __one_step(model, input, label, loss_fn, grad_scaler)
         
-        with open('gradients.csv', 'a', newline='') as file:
-            writer = csv.writer(file)
+        # with open('gradients.csv', 'a', newline='') as file:
+        #     writer = csv.writer(file)
             
-            # Log gradients to the CSV file
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    for elem in param.grad.view(-1):
-                        writer.writerow([step, name, elem.item()])
+        #     # Log gradients to the CSV file
+        #     for name, param in model.named_parameters():
+        #         if param.grad is not None:
+        #             for elem in param.grad.view(-1):
+        #                 writer.writerow([step, name, elem.item()])
+
+        def bucket_gradients(gradients, bins):
+            hist, _ = np.histogram(gradients, bins=bins)
+            return hist
+        
+        def count_in_range(gradients, lower_bound, upper_bound):
+            return ((gradients >= lower_bound) & (gradients <= upper_bound)).sum()
+        
+        gradient_stats = {}
+        bins = np.logspace(-35, 35, base=2, num=71)
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                gradients = param.grad.view(-1).cpu().numpy()  # Flatten and move to CPU
+                gradient_stats[name] = {
+                    "in_range": count_in_range(gradients, 2**-31, 2**32),
+                    "buckets": bucket_gradients(gradients, bins)
+                }
+
+        gradient_stats_all.append((step, gradient_stats))  # Append current step's stats
 
         if (step + 1) % accum_iters == 0:
             __optimize(model, optimizer, grad_scaler)
@@ -106,6 +126,11 @@ def __one_epoch(
         }
         for plugin in plugins:
             plugin.step(epoch, step, metrics)
+
+    # After loop or at certain checkpoints
+    with open('gradient_stats.pkl', 'wb') as file:
+        pickle.dump(gradient_stats_all, file)
+
     if not optimized:
         __optimize(model, optimizer, grad_scaler)
     metrics = {
