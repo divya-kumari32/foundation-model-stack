@@ -241,7 +241,7 @@ def training_state(model_path, model, rank):
 
 
 def main():
-    torch.set_default_dtype(torch.float32)
+    torch.set_default_dtype(torch.bfloat16)
 
     print0("Loading model...")
     model = models.get_model(
