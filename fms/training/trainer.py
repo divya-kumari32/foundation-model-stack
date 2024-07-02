@@ -105,7 +105,7 @@ def __one_epoch(
         bins = np.logspace(-35, 35, base=2, num=71)
         for name, param in model.named_parameters():
             if param.grad is not None:
-                gradients = param.grad.view(-1).numpy(force=True) 
+                gradients = param.grad.view(-1).float().numpy(force=True) 
                 gradient_stats[name] = {
                     "in_range": count_in_range(gradients, 2**-31, 2**32),
                     "buckets": bucket_gradients(gradients, bins)
