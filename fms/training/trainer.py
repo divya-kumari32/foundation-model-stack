@@ -71,6 +71,8 @@ def __one_epoch(
     optimizer.zero_grad()
 
     highest_step = prev_step
+    gradient_stats_all = []
+    
     for step, (input, label) in enumerate(data):
         step = prev_step + step + 1
         highest_step = step
@@ -80,8 +82,6 @@ def __one_epoch(
 
         input = input.to(device)
         label = label.to(device)
-
-        gradient_stats_all = []
 
         loss = __one_step(model, input, label, loss_fn, grad_scaler)
         
