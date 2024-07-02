@@ -119,6 +119,8 @@ def __one_epoch(
         else:
             optimized = False
 
+        print0("logging metrics now")
+
         metrics = {
             "loss": loss,
             "batch_size": batch_size,
