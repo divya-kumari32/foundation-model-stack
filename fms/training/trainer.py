@@ -71,8 +71,8 @@ def __one_epoch(
     optimizer.zero_grad()
 
     highest_step = prev_step
-    gradient_stats_all = []
-    
+    # gradient_stats_all = []
+
     for step, (input, label) in enumerate(data):
         step = prev_step + step + 1
         highest_step = step
@@ -94,24 +94,24 @@ def __one_epoch(
         #             for elem in param.grad.view(-1):
         #                 writer.writerow([step, name, elem.item()])
 
-        def bucket_gradients(gradients, bins):
-            hist, _ = np.histogram(gradients, bins=bins)
-            return hist
+        # def bucket_gradients(gradients, bins):
+        #     hist, _ = np.histogram(gradients, bins=bins)
+        #     return hist
         
-        def count_in_range(gradients, lower_bound, upper_bound):
-            return ((gradients >= lower_bound) & (gradients <= upper_bound)).sum()
+        # def count_in_range(gradients, lower_bound, upper_bound):
+        #     return ((gradients >= lower_bound) & (gradients <= upper_bound)).sum()
         
-        gradient_stats = {}
-        bins = np.logspace(-35, 35, base=2, num=71)
-        for name, param in model.named_parameters():
-            if param.grad is not None:
-                gradients = param.grad.view(-1).float().numpy(force=True) 
-                gradient_stats[name] = {
-                    "in_range": count_in_range(gradients, 2**-31, 2**32),
-                    "buckets": bucket_gradients(gradients, bins)
-                }
+        # gradient_stats = {}
+        # bins = np.logspace(-35, 35, base=2, num=71)
+        # for name, param in model.named_parameters():
+        #     if param.grad is not None:
+        #         gradients = param.grad.view(-1).float().numpy(force=True) 
+        #         gradient_stats[name] = {
+        #             "in_range": count_in_range(gradients, 2**-31, 2**32),
+        #             "buckets": bucket_gradients(gradients, bins)
+        #         }
 
-        gradient_stats_all.append((step, gradient_stats)) 
+        # gradient_stats_all.append((step, gradient_stats)) 
 
         if (step + 1) % accum_iters == 0:
             __optimize(model, optimizer, grad_scaler)
@@ -130,8 +130,8 @@ def __one_epoch(
             plugin.step(epoch, step, metrics)
 
     # After loop or at certain checkpoints
-    with open('gradient_stats.pkl', 'wb') as file:
-        pickle.dump(gradient_stats_all, file)
+    # with open('gradient_stats.pkl', 'wb') as file:
+    #     pickle.dump(gradient_stats_all, file)
 
     if not optimized:
         __optimize(model, optimizer, grad_scaler)
