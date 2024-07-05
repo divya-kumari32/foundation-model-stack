@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from fms.training.plugins import TrainerPlugin
 from fms.utils import print0
 
-# import csv
+import csv
 import numpy as np
 import pickle
 
@@ -71,7 +71,7 @@ def __one_epoch(
     optimizer.zero_grad()
 
     highest_step = prev_step
-    # gradient_stats_all = []
+    loss_stats_all = []
 
     for step, (input, label) in enumerate(data):
         step = prev_step + step + 1
@@ -119,19 +119,19 @@ def __one_epoch(
         else:
             optimized = False
 
-        print0("logging metrics now")
-
         metrics = {
             "loss": loss,
             "batch_size": batch_size,
             "input_length": input_length,
         }
+
+        # After loop or at certain checkpoints
+        with open('loss_stats_fp16.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([step, metrics['loss']])
+
         for plugin in plugins:
             plugin.step(epoch, step, metrics)
-
-    # After loop or at certain checkpoints
-    # with open('gradient_stats.pkl', 'wb') as file:
-    #     pickle.dump(gradient_stats_all, file)
 
     if not optimized:
         __optimize(model, optimizer, grad_scaler)

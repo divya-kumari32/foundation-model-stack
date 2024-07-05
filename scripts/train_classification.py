@@ -141,7 +141,7 @@ parser.add_argument(
 parser.add_argument(
     "--epochs", type=int, default=2, help="Number of epochs to train/tune"
 )
-parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
+parser.add_argument("--batch_size", type=int, default=50, help="Batch size")
 parser.add_argument(
     "--grad_accum_steps",
     type=int,
@@ -241,7 +241,7 @@ def training_state(model_path, model, rank):
 
 
 def main():
-    torch.set_default_dtype(torch.bfloat16)
+    torch.set_default_dtype(torch.float16)
 
     print0("Loading model...")
     model = models.get_model(
