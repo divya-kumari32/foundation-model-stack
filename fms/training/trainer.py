@@ -71,7 +71,6 @@ def __one_epoch(
     optimizer.zero_grad()
 
     highest_step = prev_step
-    loss_stats_all = []
 
     for step, (input, label) in enumerate(data):
         step = prev_step + step + 1
@@ -83,35 +82,7 @@ def __one_epoch(
         input = input.to(device)
         label = label.to(device)
 
-        loss = __one_step(model, input, label, loss_fn, grad_scaler)
-        
-        # with open('gradients.csv', 'a', newline='') as file:
-        #     writer = csv.writer(file)
-            
-        #     # Log gradients to the CSV file
-        #     for name, param in model.named_parameters():
-        #         if param.grad is not None:
-        #             for elem in param.grad.view(-1):
-        #                 writer.writerow([step, name, elem.item()])
-
-        # def bucket_gradients(gradients, bins):
-        #     hist, _ = np.histogram(gradients, bins=bins)
-        #     return hist
-        
-        # def count_in_range(gradients, lower_bound, upper_bound):
-        #     return ((gradients >= lower_bound) & (gradients <= upper_bound)).sum()
-        
-        # gradient_stats = {}
-        # bins = np.logspace(-35, 35, base=2, num=71)
-        # for name, param in model.named_parameters():
-        #     if param.grad is not None:
-        #         gradients = param.grad.view(-1).float().numpy(force=True) 
-        #         gradient_stats[name] = {
-        #             "in_range": count_in_range(gradients, 2**-31, 2**32),
-        #             "buckets": bucket_gradients(gradients, bins)
-        #         }
-
-        # gradient_stats_all.append((step, gradient_stats)) 
+        loss = __one_step(model, input, label, loss_fn, grad_scaler) 
 
         if (step + 1) % accum_iters == 0:
             __optimize(model, optimizer, grad_scaler)
