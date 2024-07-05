@@ -131,9 +131,9 @@ def __one_epoch(
         }
 
         # After loop or at certain checkpoints
-        # with open('loss_stats_fp16.csv', 'a', newline='') as file:
-        #     writer = csv.writer(file)
-        #     writer.writerow([step, metrics['loss']])
+        with open('loss_stats_fp16.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([step, metrics['loss']])
 
         for plugin in plugins:
             plugin.step(epoch, step, metrics)

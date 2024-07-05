@@ -139,9 +139,9 @@ parser.add_argument(
 
 # Training/tuning parameters
 parser.add_argument(
-    "--epochs", type=int, default=2, help="Number of epochs to train/tune"
+    "--epochs", type=int, default=50, help="Number of epochs to train/tune"
 )
-parser.add_argument("--batch_size", type=int, default=50, help="Batch size")
+parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
 parser.add_argument(
     "--grad_accum_steps",
     type=int,
