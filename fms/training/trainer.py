@@ -26,12 +26,6 @@ def __one_step(
     )
     with autocast:
         output = model(input)
-
-        print0("Model parameters and gradient data types:")
-        for name, param in model.named_parameters():
-            grad_dtype = param.grad.dtype if param.grad is not None else 'No gradient'
-            print0(f"Parameter: {name}, Data type: {param.dtype}, Gradient data type: {grad_dtype}")
-
         loss = loss_fn(output, label)
 
     if grad_scaler is not None:
