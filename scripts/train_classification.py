@@ -16,7 +16,7 @@ from fms import datasets, models
 from fms.training import plugins as trainplugins
 from fms.training import trainer
 from fms.utils import print0, tokenizers
-from torch_sendnn import torch_sendnn
+# from torch_sendnn import torch_sendnn
 
 #
 # This is a fairly minimal training/tuning script for causal language models.
@@ -280,8 +280,8 @@ def main():
     print0("dataset state", dataset_sd)
 
     if args.compile:
-        model = torch.compile(model, backend="sendnn")
-        optimizer.step = torch.compile(optimizer.step, backend="sendnn")
+        model = torch.compile(model)
+        optimizer.step = torch.compile(optimizer.step)
 
     tokenizer = tokenizers.get_tokenizer(args.tokenizer)
 
