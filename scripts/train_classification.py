@@ -62,6 +62,12 @@ parser.add_argument(
     help="The model variant (configuration) to tune. E.g. 7b, 13b, 70b.",
 )
 parser.add_argument(
+    "--compile",
+    type=str,
+    default="store_true",
+    help="The model variant (configuration) to tune. E.g. 7b, 13b, 70b.",
+)
+parser.add_argument(
     "--num_classes",
     type=str,
     default="micro",
@@ -144,7 +150,7 @@ parser.add_argument(
 
 # Training/tuning parameters
 parser.add_argument(
-    "--epochs", type=int, default=2, help="Number of epochs to train/tune"
+    "--epochs", type=int, default=50, help="Number of epochs to train/tune"
 )
 parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
 parser.add_argument(
@@ -246,7 +252,7 @@ def training_state(model_path, model, rank):
 
 
 def main():
-    torch.set_default_dtype(torch.float32)
+    torch.set_default_dtype(torch.float16)
 
     print0("Loading model...")
     model = models.get_model(
