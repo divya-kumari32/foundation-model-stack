@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader, DistributedSampler
 from fms.training.plugins import TrainerPlugin
 from fms.utils import print0
 
+import numpy as np
+import pickle
 
 def __one_step(
     model: nn.Module,
@@ -68,6 +70,8 @@ def __one_epoch(
     optimizer.zero_grad()
 
     highest_step = prev_step
+    gradient_stats_all = []
+
     for step, (input, label) in enumerate(data):
         step = prev_step + step + 1
         highest_step = step
@@ -79,6 +83,25 @@ def __one_epoch(
         label = label.to(device)
 
         loss = __one_step(model, input, label, loss_fn, grad_scaler)
+
+        def bucket_gradients(gradients, bins):
+            hist, _ = np.histogram(gradients, bins=bins)
+            return hist
+        
+        def count_in_range(gradients, lower_bound, upper_bound):
+            return ((gradients >= lower_bound) & (gradients <= upper_bound)).sum()
+        
+        gradient_stats = {}
+        bins = np.logspace(-35, 35, base=2, num=71)
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                gradients = param.grad.view(-1).float().numpy(force=True) 
+                gradient_stats[name] = {
+                    "buckets": bucket_gradients(gradients, bins)
+                }
+
+        gradient_stats_all.append((step, gradient_stats)) 
+
         if (step + 1) % accum_iters == 0:
             __optimize(model, optimizer, grad_scaler)
             optimized = True
@@ -92,6 +115,10 @@ def __one_epoch(
         }
         for plugin in plugins:
             plugin.step(epoch, step, metrics)
+
+    with open('gradient_stats_fp16.pkl', 'wb') as file:
+        pickle.dump(gradient_stats_all, file)
+
     if not optimized:
         __optimize(model, optimizer, grad_scaler)
     metrics = {
