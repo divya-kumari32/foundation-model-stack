@@ -62,12 +62,6 @@ parser.add_argument(
     help="The model variant (configuration) to tune. E.g. 7b, 13b, 70b.",
 )
 parser.add_argument(
-    "--compile",
-    type=str,
-    default="store_true",
-    help="The model variant (configuration) to tune. E.g. 7b, 13b, 70b.",
-)
-parser.add_argument(
     "--num_classes",
     type=str,
     default="micro",
