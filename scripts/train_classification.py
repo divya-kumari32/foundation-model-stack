@@ -197,7 +197,7 @@ def get_loss_fn():
 
 
 def training_state(model_path, model, rank):
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-6, eps=1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, eps=1e-5)
     is_fsdp = isinstance(model, FSDP)
     dataset_sd = {}
     epoch = 0
