@@ -361,7 +361,7 @@ def main():
         device=device,
     )
     reporting = trainplugins.MetricReporter(
-        seconds=3,
+        seconds=0,
         prev_step=prev_step,
         cumulative_tokens=cum_tokens,
         group=group,
