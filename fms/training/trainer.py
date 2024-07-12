@@ -116,7 +116,7 @@ def __one_epoch(
         for plugin in plugins:
             plugin.step(epoch, step, metrics)
 
-    with open('gradient_stats_fp16.pkl', 'wb') as file:
+    with open('gradient_stats_fp32.pkl', 'wb') as file:
         pickle.dump(gradient_stats_all, file)
 
     if not optimized:
