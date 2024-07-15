@@ -120,7 +120,7 @@ def __one_epoch(
     # with open('gradient_stats_fp32.pkl', 'wb') as file:
     #     pickle.dump(gradient_stats_all, file)
 
-    with open('loss_stats_bert_bf16.csv', 'a', newline='') as file:
+    with open('loss_stats_bert_fp16.csv', 'a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow([step, metrics['loss']])
 
