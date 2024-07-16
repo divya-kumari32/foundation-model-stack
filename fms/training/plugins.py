@@ -162,8 +162,8 @@ class MetricReporter(TrainerPlugin):
             if step == self.last_reported_step:
                 return
             steps_taken = step - self.last_reported_step
-            if steps_taken * self.time_per_step < self.seconds:
-                return
+            # if steps_taken * self.time_per_step < self.seconds:
+            #     return
             time_per_step = elapsed / (step - self.last_reported_step)
             self.time_per_step.fill_(time_per_step)
             steps = step - self.last_reported_step
